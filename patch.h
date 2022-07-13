@@ -25,6 +25,8 @@ enum PatchError
     PatchError_PATCH,
 };
 
+// dst_data will be allocated by this function using malloc.
+// dst_data will not be allocated if patch returns an error.
 enum PatchError patch(
     enum PatchType type,
     uint8_t** dst_data, size_t* dst_size,
