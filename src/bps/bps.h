@@ -1,3 +1,6 @@
+// Copyright 2022 TotalJustice.
+// SPDX-License-Identifier: Zlib
+
 #pragma once
 
 #ifdef __cplusplus

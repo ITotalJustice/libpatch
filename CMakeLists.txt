@@ -1,27 +1,27 @@
 cmake_minimum_required(VERSION 3.0.2)
 
+project(patch
+    VERSION 1.0.0
+    LANGUAGES C
+)
+
 option(EXAMPLE_PATCHER "build patcher exe" OFF)
 
+# export compile commands
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
 
-project(patch LANGUAGES C)
-add_library(patch patch.c)
+# enable testing
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    include(CTest)
 
-add_subdirectory(ips)
-add_subdirectory(ups)
-add_subdirectory(bps)
+    if (BUILD_TESTING)
+        add_subdirectory(tests)
+    endif()
+endif()
 
-target_link_libraries(patch PRIVATE ips ups bps)
-target_include_directories(patch PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-target_compile_options(patch PRIVATE
-    $<$<OR:$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:AppleClang>,$<C_COMPILER_ID:GNU>>:
-        -Wall
-        -Wextra
-    >
-    $<$<C_COMPILER_ID:MSVC>:
-        /W4
-    >
-)
+add_subdirectory(src)
 
 if (EXAMPLE_PATCHER)
     add_subdirectory(examples/patcher)

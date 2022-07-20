@@ -1,3 +1,8 @@
+/**
+ * Copyright 2022 TotalJustice.
+ * SPDX-License-Identifier: Zlib
+ */
+
 // simple example of using the patchers
 // ./exe rom.bin patch.ips out.bin
 

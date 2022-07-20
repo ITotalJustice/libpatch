@@ -1,0 +1,7 @@
+{
+    "name": "libpatch",
+    "version-string": "1.0.0",
+    "homepage": "https://github.com/ITotalJustice/libpatch",
+    "description": "simple patcher for ips, ups and bps files! (written in c99)",
+    "license": "Zlib"
+  }

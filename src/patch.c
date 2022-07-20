@@ -1,3 +1,8 @@
+/**
+ * Copyright 2022 TotalJustice.
+ * SPDX-License-Identifier: Zlib
+ */
+
 #include "patch.h"
 #include "ips/ips.h"
 #include "ups/ups.h"
@@ -27,7 +32,13 @@ enum PatchError patch(
                 goto fail;
             }
 
-            *dst_size = src_size;
+            // ups patches can increase / decrease the size of src data.
+            if (!ips_get_size(patch_data, patch_size, dst_size))
+            {
+                error = PatchError_BAD_SIZE;
+                goto fail;
+            }
+
             *dst_data = malloc(*dst_size);
             if (!*dst_data)
             {
