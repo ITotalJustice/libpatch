@@ -24,6 +24,7 @@ static int get_patch_type(const char* file_name)
     {
         [PatchType_IPS] = ".ips",
         [PatchType_UPS] = ".ups",
+        [PatchType_BPS] = ".bps",
     };
 
     const char* ext = strrchr(file_name, '.');
@@ -40,6 +41,11 @@ static int get_patch_type(const char* file_name)
     if (!strcmp(ext, extentions[PatchType_UPS]))
     {
         return PatchType_UPS;
+    }
+
+    if (!strcmp(ext, extentions[PatchType_BPS]))
+    {
+        return PatchType_BPS;
     }
 
     return -1;
@@ -163,7 +169,7 @@ int main(int argc, char** argv)
     const int patch_type = get_patch_type(patch_filename);
     if (patch_type == -1)
     {
-        return cleanup("unkown patch type");
+        return cleanup("unknown patch type");
     }
 
     if (PatchError_OK != patch(patch_type, &OUT_DATA, &OUT_SIZE, ROM_DATA, ROM_SIZE, PATCH_DATA, PATCH_SIZE))

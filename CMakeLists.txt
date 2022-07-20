@@ -8,8 +8,9 @@ add_library(patch patch.c)
 
 add_subdirectory(ips)
 add_subdirectory(ups)
+add_subdirectory(bps)
 
-target_link_libraries(patch PRIVATE ips ups)
+target_link_libraries(patch PRIVATE ips ups bps)
 target_include_directories(patch PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_compile_options(patch PRIVATE

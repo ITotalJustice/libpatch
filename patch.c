@@ -1,6 +1,7 @@
 #include "patch.h"
 #include "ips/ips.h"
 #include "ups/ups.h"
+#include "bps/bps.h"
 #include <stdlib.h>
 
 
@@ -63,6 +64,34 @@ enum PatchError patch(
             }
 
             if (!ups_patch(*dst_data, *dst_size, src_data, src_size, patch_data, patch_size))
+            {
+                error = PatchError_PATCH;
+                goto fail;
+            }
+        } break;
+
+        case PatchType_BPS: {
+            if (!bps_verify_header(patch_data, patch_size))
+            {
+                error = PatchError_HEADER;
+                goto fail;
+            }
+
+            // bps patches can increase / decrease the size of src data.
+            if (!bps_get_sizes(patch_data, patch_size, dst_size, NULL, NULL, NULL))
+            {
+                error = PatchError_BAD_SIZE;
+                goto fail;
+            }
+
+            *dst_data = malloc(*dst_size);
+            if (!*dst_data)
+            {
+                error = PatchError_MALLOC;
+                goto fail;
+            }
+
+            if (!bps_patch(*dst_data, *dst_size, src_data, src_size, patch_data, patch_size))
             {
                 error = PatchError_PATCH;
                 goto fail;

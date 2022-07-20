@@ -13,6 +13,7 @@ enum PatchType
 {
     PatchType_IPS,
     PatchType_UPS,
+    PatchType_BPS,
 };
 
 enum PatchError
