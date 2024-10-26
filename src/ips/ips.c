@@ -5,63 +5,16 @@
 
 /* SOURCE: https://zerosoft.zophar.net/ips.php */
 #include "ips.h"
+#include "common/common.h"
 #include <string.h>
 
 /* header is 5 bytes plus at least 2 bytes for input and output size */
-#define PATCH_HEADER_SIZE 0x5
-#define PATCH_MIN_SIZE 0x9
-#define PATCH_MAX_SIZE 0x1000000 /* 16MiB */
+#define PATCH_HEADER_SIZE 0x5U
+#define PATCH_MIN_SIZE 0x9U
+#define PATCH_MAX_SIZE 0x1000000U /* 16MiB */
 
-#define EOF_MAGIC 0x454F46
-#define RLE_ENCODING 0
-
-
-static uint8_t safe_read(const uint8_t* data, size_t* offset, const size_t size)
-{
-    if (*offset < size)
-    {
-        const uint8_t value = data[*offset];
-        ++*offset;
-
-        return value;
-    }
-
-    return 0;
-}
-
-/* basically a memcpy */
-static uint16_t safe_read2(const uint8_t* data, size_t* offset, const size_t size)
-{
-    *offset += 2;
-
-    if (*offset > size)
-    {
-        return 0;
-    }
-
-    return (data[*offset - 2] << 8) | (data[*offset - 1]);
-}
-
-static uint32_t safe_read3(const uint8_t* data, size_t* offset, const size_t size)
-{
-    *offset += 3;
-
-    if (*offset > size)
-    {
-        return 0;
-    }
-
-    return (data[*offset - 3] << 16) | (data[*offset - 2] << 8) | (data[*offset - 1]);
-}
-
-static void safe_write(uint8_t* data, const uint8_t value, size_t* offset, const size_t size)
-{
-    if (*offset < size)
-    {
-        data[*offset] = value;
-        ++*offset;
-    }
-}
+#define EOF_MAGIC 0x454F46U
+#define RLE_ENCODING 0U
 
 bool ips_verify_header(const uint8_t* patch, const size_t patch_size)
 {
@@ -87,7 +40,7 @@ bool ips_verify_header(const uint8_t* patch, const size_t patch_size)
     patch, that way, the second pass is a lot faster at least.
     i currently don't do this.
 */
-bool ips_get_size(const uint8_t* patch, size_t patch_size, size_t* dst_size)
+bool ips_get_size(const uint8_t* patch, size_t patch_size, size_t src_size, size_t* dst_size)
 {
     size_t patch_offset = PATCH_HEADER_SIZE;
     size_t output_size = 0;
@@ -95,7 +48,7 @@ bool ips_get_size(const uint8_t* patch, size_t patch_size, size_t* dst_size)
     while (patch_offset < patch_size)
     {
         size_t new_output_size = 0;
-        const size_t offset = safe_read3(patch, &patch_offset, patch_size);
+        const size_t offset = safe_read(patch, &patch_offset, 3, patch_size);
 
         /* check if last 3 bytes were EOF */
         if (offset == EOF_MAGIC)
@@ -103,11 +56,11 @@ bool ips_get_size(const uint8_t* patch, size_t patch_size, size_t* dst_size)
             break;
         }
 
-        const uint16_t size = safe_read2(patch, &patch_offset, patch_size);
+        const uint16_t size = safe_read(patch, &patch_offset, 2, patch_size);
 
         if (size == RLE_ENCODING)
         {
-            const uint16_t rle_size = safe_read2(patch, &patch_offset, patch_size);
+            const uint16_t rle_size = safe_read(patch, &patch_offset, 2, patch_size);
             patch_offset++; // safe_read() for the value
 
             new_output_size = offset + rle_size;
@@ -125,11 +78,29 @@ bool ips_get_size(const uint8_t* patch, size_t patch_size, size_t* dst_size)
     }
 
     *dst_size = output_size;
+
+    // truncated rom
+    if (patch_offset + 3 == patch_size)
+    {
+        // is this correct?
+        const uint32_t size = safe_read(patch, &patch_offset, 3, patch_size);
+        if (size != output_size)
+        {
+            return false;
+        }
+        *dst_size = output_size;
+    }
+    else
+    {
+        // use src_size if larger
+        *dst_size = src_size > output_size ? src_size : output_size;
+    }
+
     return true;
 }
 
 /* applies the ups patch to the dst data */
-bool ips_patch(
+bool ips_patch_apply(
     uint8_t* dst, const size_t dst_size,
     const uint8_t* src, const size_t src_size,
     const uint8_t* patch, const size_t patch_size
@@ -155,14 +126,12 @@ bool ips_patch(
 
     patch_offset = PATCH_HEADER_SIZE;
 
-    if (src_size < dst_size)
-    {
-        memcpy(dst, src, src_size);
-    }
+    // copy over data
+    memcpy(dst, src, src_size < dst_size ? src_size : dst_size);
 
     while (patch_offset < patch_size)
     {
-        size_t offset = safe_read3(patch, &patch_offset, patch_size);
+        size_t offset = safe_read(patch, &patch_offset, 3, patch_size);
 
         /* check if last 3 bytes were EOF */
         if (offset == EOF_MAGIC)
@@ -170,19 +139,19 @@ bool ips_patch(
             break;
         }
 
-        uint16_t size = safe_read2(patch, &patch_offset, patch_size);
+        uint16_t size = safe_read(patch, &patch_offset, 2, patch_size);
 
         if (size == RLE_ENCODING)
         {
-            uint16_t rle_size = safe_read2(patch, &patch_offset, patch_size);
-            const uint8_t value = safe_read(patch, &patch_offset, patch_size);
+            uint16_t rle_size = safe_read(patch, &patch_offset, 2, patch_size);
+            const uint8_t value = safe_read(patch, &patch_offset, 1, patch_size);
 
             while (rle_size--)
             {
                 ASSERT_BOUNDS(offset, dst_size);
                 ASSERT_BOUNDS(patch_offset, patch_size);
 
-                safe_write(dst, value, &offset, dst_size);
+                safe_write(dst, value, &offset, 1, dst_size);
             }
         }
         else
@@ -192,8 +161,8 @@ bool ips_patch(
                 ASSERT_BOUNDS(offset, dst_size);
                 ASSERT_BOUNDS(patch_offset, patch_size);
 
-                const uint8_t value = safe_read(patch, &patch_offset, patch_size);
-                safe_write(dst, value, &offset, dst_size);
+                const uint8_t value = safe_read(patch, &patch_offset, 1, patch_size);
+                safe_write(dst, value, &offset, 1, dst_size);
             }
         }
     }

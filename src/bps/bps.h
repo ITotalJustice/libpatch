@@ -18,13 +18,13 @@ bool bps_verify_header(const uint8_t* patch, size_t patch_size);
 /* src_size: [optional] */
 /* meta_size: [optional] */
 /* offset: [optional] */
-bool bps_get_sizes(
+bool bps_get_size(
     const uint8_t* patch, size_t patch_size,
     size_t* dst_size, size_t* src_size, size_t* meta_size, size_t* offset
 );
 
 /* dst_size: large enough to fit entire output */
-bool bps_patch(
+bool bps_patch_apply(
     uint8_t* dst, size_t dst_size,
     const uint8_t* src, size_t src_size,
     const uint8_t* patch, size_t patch_size

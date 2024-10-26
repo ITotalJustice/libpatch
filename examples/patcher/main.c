@@ -15,45 +15,47 @@
 #include <stdlib.h>
 #include <string.h>
 
-static uint8_t* ROM_DATA = {0};
 static uint8_t* PATCH_DATA = {0};
+static uint8_t* ROM_DATA = {0};
 static uint8_t* OUT_DATA = {0};
 
-static size_t ROM_SIZE = {0};
 static size_t PATCH_SIZE = {0};
+static size_t ROM_SIZE = {0};
 static size_t OUT_SIZE = {0};
 
-static int get_patch_type(const char* file_name)
+struct SizePair
 {
-    static const char* extentions[] =
-    {
-        [PatchType_IPS] = ".ips",
-        [PatchType_UPS] = ".ups",
-        [PatchType_BPS] = ".bps",
-    };
+    const char* str;
+    double size;
+};
 
-    const char* ext = strrchr(file_name, '.');
-    if (!ext)
+static const char* PATCH_TYPE_STR[] =
+{
+    [PatchType_IPS] = "ips",
+    [PatchType_UPS] = "ups",
+    [PatchType_BPS] = "bps",
+};
+
+// not perfect but it'll do
+static struct SizePair get_size_pair(size_t size)
+{
+    struct SizePair pair;
+    if (size > 1024 * 1024 * 100)
     {
-        return -1;
+        pair.str = "GiB";
+        pair.size = (double)size / 1024.0 / 1024.0 / 1024.0;
     }
-
-    if (!strcmp(ext, extentions[PatchType_IPS]))
+    else if (size > 1024 * 100)
     {
-        return PatchType_IPS;
+        pair.str = "MiB";
+        pair.size = (double)size / 1024.0 / 1024.0;
     }
-
-    if (!strcmp(ext, extentions[PatchType_UPS]))
+    else
     {
-        return PatchType_UPS;
+        pair.str = "KiB";
+        pair.size = (double)size / 1024.0;
     }
-
-    if (!strcmp(ext, extentions[PatchType_BPS]))
-    {
-        return PatchType_BPS;
-    }
-
-    return -1;
+    return pair;
 }
 
 static uint8_t* readfile(const char* filepath, size_t* size)
@@ -133,51 +135,59 @@ static int cleanup(const char* error_message)
         printf("ERROR: %s\n", error_message);
     }
 
-    if (ROM_DATA)
-    {
-        free(ROM_DATA);
-        ROM_DATA = NULL;
-    }
     if (PATCH_DATA)
     {
         free(PATCH_DATA);
-        PATCH_DATA = NULL;
+    }
+    if (ROM_DATA)
+    {
+        free(ROM_DATA);
     }
     if (OUT_DATA)
     {
         free(OUT_DATA);
-        OUT_DATA = NULL;
     }
 
-    return 1;
+    return error_message ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 int main(int argc, char** argv)
 {
     if (argc < 4)
     {
-        return cleanup("missing args: ./exe rom.bin patch.ips out.bin");
+        return cleanup("missing args: ./exe patch.ips rom.bin out.bin");
     }
 
-    const char* rom_filename = argv[1];
-    const char* patch_filename = argv[2];
+    const char* patch_filename = argv[1];
+    const char* rom_filename = argv[2];
     const char* out_filename = argv[3];
 
-    ROM_DATA = readfile(rom_filename, &ROM_SIZE);
     PATCH_DATA = readfile(patch_filename, &PATCH_SIZE);
+    ROM_DATA = readfile(rom_filename, &ROM_SIZE);
 
-    if (!ROM_DATA || !ROM_SIZE || !PATCH_DATA || !PATCH_SIZE)
+    if (!PATCH_DATA || !PATCH_SIZE || !ROM_DATA || !ROM_SIZE)
     {
         return cleanup("failed to read files");
     }
 
-    const int patch_type = get_patch_type(patch_filename);
-    if (patch_type == -1)
+    enum PatchType type;
+    if (PatchError_OK != patch_get_type(&type, PATCH_DATA, PATCH_SIZE))
     {
         return cleanup("unknown patch type");
     }
 
-    if (PatchError_OK != patch(patch_type, &OUT_DATA, &OUT_SIZE, ROM_DATA, ROM_SIZE, PATCH_DATA, PATCH_SIZE))
+    if (PatchError_OK != patch_get_size(type, &OUT_SIZE, ROM_SIZE, PATCH_DATA, PATCH_SIZE))
+    {
+        return cleanup("unknown patch size");
+    }
+
+    OUT_DATA = malloc(OUT_SIZE);
+    if (!OUT_DATA)
+    {
+        return cleanup("failed to allocate output");
+    }
+
+    if (PatchError_OK != patch_apply(type, OUT_DATA, OUT_SIZE, ROM_DATA, ROM_SIZE, PATCH_DATA, PATCH_SIZE))
     {
         return cleanup("failed to patch file");
     }
@@ -187,8 +197,14 @@ int main(int argc, char** argv)
         return cleanup("failed to write patched file");
     }
 
-    printf("patched: %s\n", out_filename);
-    cleanup(NULL);
+    printf("patched!\n");
+    printf("\tpatch_file: %s\n", patch_filename);
+    printf("\tinput_file: %s\n", rom_filename);
+    printf("\toutput_file: %s\n", out_filename);
+    printf("\tpatch_type: %s\n", PATCH_TYPE_STR[type]);
+    printf("\tpatch_size: %.2f %s\n", get_size_pair(PATCH_SIZE).size, get_size_pair(PATCH_SIZE).str);
+    printf("\tsrc_size: %.2f %s\n", get_size_pair(ROM_SIZE).size, get_size_pair(ROM_SIZE).str);
+    printf("\tdst_size: %.2f %s\n", get_size_pair(OUT_SIZE).size, get_size_pair(OUT_SIZE).str);
 
-    return 0;
+    return cleanup(NULL);
 }

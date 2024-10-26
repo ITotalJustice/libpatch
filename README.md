@@ -28,31 +28,35 @@ an example of how it would look in your code.
 ```c
 uint8_t* apply_patch(
     const uint8_t* src_data, size_t src_size,
-    const uint8_t* patch_data, size_t patch_size, enum PatchType type,
+    const uint8_t* patch_data, size_t patch_size,
     size_t* out_size
 ) {
-
-    uint8_t* out = NULL;
-
-    const enum PatchError result = patch(
-        type,
-        &out, out_size,
-        src_data, src_size,
-        patch_data, patch_size
-    );
-
-    // if patch failed, no data is allocated, so out==NULL
-    if (result != PatchError_OK)
+    enum PatchType type;
+    if (PatchError_OK != patch_get_type(&type, patch_data, patch_size))
     {
-        // handle error here
         return NULL;
     }
-    else
+
+    if (PatchError_OK != patch_get_size(type, out_size, src_size, patch_data, patch_size))
     {
-        // patch worked, out is now pointing to allocated data.
-        // remember to call free when done!
-        return out;
+        return NULL;
     }
+
+    uint8_t* out = malloc(out_size);
+    if (!out)
+    {
+        return NULL
+    }
+
+    if (PatchError_OK != patch_apply(type, out, out_size, src_data, src_size, patch_data, patch_size))
+    {
+        free(out);
+        return NULL;
+    }
+
+    // patch worked, out is now pointing to allocated data.
+    // remember to call free when done!
+    return out;
 }
 ```
 

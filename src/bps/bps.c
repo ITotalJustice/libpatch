@@ -5,60 +5,11 @@
 
 /* SOURCE: https://www.romhacking.net/documents/764/ */
 #include "bps.h"
-#include <string.h>
+#include "common/common.h"
 
-
-#define PATCH_HEADER_SIZE 0x4
+#define PATCH_HEADER_SIZE 0x4U
 /* header + src / dst / meta sizes + command + crc32 */
-#define PATCH_MIN_SIZE (PATCH_HEADER_SIZE + 3 + 1 + 12)
-
-
-/* SOURCE: https://web.archive.org/web/20190108202303/http://www.hackersdelight.org/hdcodetxt/crc.c.txt */
-static uint32_t crc32(const uint8_t* data, const size_t size)
-{
-    int crc;
-    unsigned int byte, c;
-    const unsigned int g0 = 0xEDB88320,    g1 = g0>>1,
-        g2 = g0>>2, g3 = g0>>3, g4 = g0>>4, g5 = g0>>5,
-        g6 = (g0>>6)^g0, g7 = ((g0>>6)^g0)>>1;
-
-    crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < size; i++) {
-        byte = data[i];
-        crc = crc ^ byte;
-        c = ((crc<<31>>31) & g7) ^ ((crc<<30>>31) & g6) ^
-            ((crc<<29>>31) & g5) ^ ((crc<<28>>31) & g4) ^
-            ((crc<<27>>31) & g3) ^ ((crc<<26>>31) & g2) ^
-            ((crc<<25>>31) & g1) ^ ((crc<<24>>31) & g0);
-        crc = ((unsigned)crc >> 8) ^ c;
-    }
-    return ~crc;
-}
-
-/* this can fail if the int is bigger than 8 bytes */
-static size_t vln_read(const uint8_t* data, size_t* offset)
-{
-    size_t result = 0;
-    size_t shift = 0;
-
-    /* just in case its a bad patch, only run until max size */
-    for (uint8_t i = 0; i < sizeof(size_t); ++i)
-    {
-        const uint8_t value = data[*offset];
-        ++*offset;
-
-        if (value & 0x80)
-        {
-            result += (value & 0x7F) << shift;
-            break;
-        }
-
-        result += (value | 0x80) << shift;
-        shift += 7;
-    }
-
-    return result;
-}
+#define PATCH_MIN_SIZE (PATCH_HEADER_SIZE + 3U + 1U + 12U)
 
 bool bps_verify_header(const uint8_t* patch, size_t patch_size)
 {
@@ -75,7 +26,7 @@ bool bps_verify_header(const uint8_t* patch, size_t patch_size)
     return true;
 }
 
-bool bps_get_sizes(
+bool bps_get_size(
     const uint8_t* patch, size_t patch_size,
     size_t* dst_size, size_t* src_size, size_t* meta_size, size_t* offset
 ) {
@@ -109,7 +60,7 @@ bool bps_get_sizes(
 }
 
 /* dst_size: large enough to fit entire output */
-bool bps_patch(
+bool bps_patch_apply(
     uint8_t* dst, size_t dst_size,
     const uint8_t* src, size_t src_size,
     const uint8_t* patch, size_t patch_size
@@ -128,7 +79,7 @@ bool bps_patch(
     size_t target_size = 0;
     size_t metadata_size = 0;
 
-    if (!bps_get_sizes(patch, patch_size, &target_size, &source_size, &metadata_size, &patch_offset))
+    if (!bps_get_size(patch, patch_size, &target_size, &source_size, &metadata_size, &patch_offset))
     {
         return false;
     }
@@ -147,23 +98,19 @@ bool bps_patch(
     patch_offset += metadata_size;
 
     /* crc's are at the last 12 bytes, each 4 bytes each. */
-    uint32_t src_crc = 0;
-    uint32_t dst_crc = 0;
-    uint32_t patch_crc = 0;
-
-    memcpy(&src_crc, patch + (patch_size - 12), sizeof(src_crc));
-    memcpy(&dst_crc, patch + (patch_size - 8), sizeof(dst_crc));
-    memcpy(&patch_crc, patch + (patch_size - 4), sizeof(patch_crc));
+    const uint32_t src_crc = read32(patch, patch_size - 12);
+    const uint32_t dst_crc = read32(patch, patch_size - 8);
+    const uint32_t patch_crc = read32(patch, patch_size - 4);
 
     /* check that the src and patch is valid. */
     /* dst is checked at the end. */
-    if (src_crc != crc32(src, src_size))
+    if (src_crc != patch_crc32(src, src_size))
     {
         return false;
     }
 
     /* we don't check it's own crc32 (obviously) */
-    if (patch_crc != crc32(patch, patch_size - 4))
+    if (patch_crc != patch_crc32(patch, patch_size - 4))
     {
         return false;
     }
@@ -188,8 +135,7 @@ bool bps_patch(
         switch (action)
         {
             case SourceRead: {
-                while (len--)
-                {
+                while (len--) {
                     dst[dst_offset] = src[dst_offset];
                     dst_offset++;
                 }
@@ -223,7 +169,7 @@ bool bps_patch(
         }
     }
 
-    if (dst_crc != crc32(dst, dst_size))
+    if (dst_crc != patch_crc32(dst, dst_size))
     {
         return false;
     }

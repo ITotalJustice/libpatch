@@ -29,13 +29,23 @@ enum PatchError
     PatchError_BAD_ARGS,
     PatchError_MALLOC,
     PatchError_PATCH,
+    PatchError_BAD_TYPE,
 };
 
-// dst_data will be allocated by this function using malloc.
-// dst_data will not be allocated if patch returns an error.
-enum PatchError patch(
+enum PatchError patch_get_type(
+    enum PatchType* type,
+    const uint8_t* patch_data, size_t patch_size
+);
+
+enum PatchError patch_get_size(
     enum PatchType type,
-    uint8_t** dst_data, size_t* dst_size,
+    size_t *dst_size, size_t src_size,
+    const uint8_t* patch_data, size_t patch_size
+);
+
+enum PatchError patch_apply(
+    enum PatchType type,
+    uint8_t* dst_data, size_t dst_size,
     const uint8_t* src_data, size_t src_size,
     const uint8_t* patch_data, size_t patch_size
 );
